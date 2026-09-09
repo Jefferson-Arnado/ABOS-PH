@@ -433,3 +433,72 @@ export async function getBusinessIdBySourceId(
   if (error) throw new Error(`business lookup failed: ${error.message}`);
   return (data as { id: string } | null)?.id ?? null;
 }
+
+/**
+ * One business + its latest analysis (latest row wins, ARCHITECTURE §5)
+ * for the detail page (spec §14). Returns null when the id is unknown.
+ */
+export async function getBusinessWithLatestAnalysis(
+  businessId: string
+): Promise<ScoredBusiness | null> {
+  const db = getSupabaseAdmin();
+
+  const { data, error } = await db
+    .from("businesses")
+    .select(
+      "id, name, category, address, latitude, longitude, phone, website, source, source_id, latest_business_analysis(*)"
+    )
+    .eq("id", businessId)
+    .maybeSingle();
+  if (error) throw new Error(`business query failed: ${error.message}`);
+
+  const row = data as
+    | {
+        id: string;
+        name: string;
+        category: string | null;
+        address: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        phone: string | null;
+        website: string | null;
+        source: string;
+        source_id: string;
+        latest_business_analysis:
+          | (AnalysisRowSnake & {
+              opportunity_score: number;
+              opportunity_tier: OpportunityTier;
+            })
+          | (AnalysisRowSnake & {
+              opportunity_score: number;
+              opportunity_tier: OpportunityTier;
+            })[]
+          | null;
+      }
+    | null;
+  if (!row) return null;
+
+  const business = rowToBusiness({
+    ...row,
+    source: row.source as BusinessRow["source"],
+    sourceId: row.source_id,
+    createdAt: "",
+    updatedAt: "",
+  });
+
+  // PostgREST treats a view embed as 1:M (no unique constraint on the
+  // view's business_id), so the payload may be an object OR an array.
+  const raw = row.latest_business_analysis;
+  const a = Array.isArray(raw) ? (raw[0] ?? null) : raw;
+  if (!a) return { business, analysis: null, opportunity: { score: 0, tier: "low", issues: [] } };
+
+  return {
+    business,
+    analysis: analysisRowToWebsiteAnalysis(a),
+    opportunity: {
+      score: a.opportunity_score,
+      tier: a.opportunity_tier,
+      issues: a.issues ?? [],
+    },
+  };
+}
