@@ -13,7 +13,7 @@
 | Phase | Description | Status |
 |---|---|---|
 | 0 | Project setup | ✅ Done (2026-09-09) |
-| 1 | Data model & database | 🔄 Code done — awaiting migration apply |
+| 1 | Data model & database | ✅ Done (2026-09-09) |
 | 2 | Business data provider (OSM) | ☐ Not started |
 | 3 | Website detection & analyzer | ☐ Not started |
 | 4 | Opportunity scoring engine | ☐ Not started |
@@ -40,7 +40,7 @@
 
 ---
 
-## Phase 1 — Data model & database 🔄
+## Phase 1 — Data model & database ✅
 
 - [x] Define TypeScript types: `Business`, `ScanParams`, `WebsiteAnalysis`, `OpportunityScore`, `Lead` (`src/types/`) — incl. DB row types (`db.ts`) and constants with unit tests
 - [x] Create Supabase schema (SQL migration) → `supabase/migrations/0001_init.sql`:
@@ -53,7 +53,7 @@
 - [x] Seed/dedup logic: DB-level dedup via unique constraint (+`leads(user_id, business_id)` unique); app-level upsert lands with the scan pipeline in Phase 5
 - [x] Lead statuses enum: `New | Contacted | Interested | Proposal | Won | Lost` — Postgres enum `lead_status` + RLS policies on all 5 tables
 
-**Done when:** Migration applies cleanly to Supabase; types match schema. → **Pending user step:** run `supabase/migrations/0001_init.sql` in Dashboard → SQL Editor, then verify with `node --env-file=.env.local scripts/check-schema.mjs`.
+**Done when:** Migration applies cleanly to Supabase; types match schema. ✅ Verified: migration applied via SQL Editor 2026-09-09; `scripts/check-schema.mjs` confirms all 5 tables, columns, and `lead_status` enum on the live project.
 
 ---
 
