@@ -32,7 +32,7 @@
 - [x] Install & configure Tailwind CSS + shadcn/ui (radix base, nova preset; button/input/label/select/checkbox/card/badge/tabs/table/textarea)
 - [x] Set up ESLint + Prettier (`.prettierrc`, printWidth 100)
 - [x] Set up Vitest for unit tests + `npm run test` / `npm run typecheck` scripts (node env, `@/` alias, `tests/`)
-- [ ] Create Supabase project (free tier) & add env vars (`.env.local`, `.env.example`) — *`.env.example` + `.env.local` templates ready; awaiting Supabase credentials*
+- [x] Create Supabase project (free tier) & add env vars (`.env.local`, `.env.example`) — ✅ connected & keys verified via `node --env-file=.env.local scripts/check-supabase.mjs`
 - [x] Add `src/` folder structure per spec §21 (`app/`, `components/`, `lib/`, `types/`) — `lib/utils.ts` + `components/ui/` seeded
 - [x] Init git repo, first commit, README with setup instructions
 
