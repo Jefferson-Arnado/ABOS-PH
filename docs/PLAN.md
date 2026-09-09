@@ -16,7 +16,7 @@
 | 1 | Data model & database | ✅ Done (2026-09-09) |
 | 2 | Business data provider (OSM) | ✅ Done (2026-09-09) |
 | 3 | Website detection & analyzer | ✅ Done (2026-09-09) |
-| 4 | Opportunity scoring engine | ☐ Not started |
+| 4 | Opportunity scoring engine | ✅ Done (2026-09-10) |
 | 5 | Scan pipeline & API | ☐ Not started |
 | 6 | UI — Search screen | ☐ Not started |
 | 7 | UI — Results dashboard & detail page | ☐ Not started |
@@ -89,9 +89,9 @@
 
 ---
 
-## Phase 4 — Opportunity scoring engine
+## Phase 4 — Opportunity scoring engine ✅
 
-- [ ] Implement deterministic rule-based scoring (`lib/scoring/opportunity-score.ts`) — **no AI here** (spec §9):
+- [x] Implement deterministic rule-based scoring (`lib/scoring/opportunity-score.ts`) — **no AI here** (spec §9):
 
   | Condition | Points |
   |---|---|
@@ -103,12 +103,15 @@
   | No contact form | +5 |
   | Missing metadata | +5 |
   | Slow website | +10 |
+  | Active business (phone/address on file) | +10 |
 
-- [ ] Normalize final score to **0–100**
-- [ ] Map score → tier: 🔥 HIGH / 🟡 MEDIUM / 🟢 LOW
-- [ ] Emit the issue list (e.g. `["No website", "No online ordering"]`) used by UI + AI later
+- [x] Normalize final score to **0–100**
+- [x] Map score → tier: 🔥 HIGH (≥ 70) / 🟡 MEDIUM (≥ 40) / 🟢 LOW
+- [x] Emit the issue list (e.g. `["No website", "No online ordering"]`) used by UI + AI later
 
-**Done when:** Scoring matches the two worked examples in spec §10 (Business A ≈ 80, Business B ≈ 12).
+  Implementation notes: no website → +40 baseline with implied no-booking/no-ordering (+15 each, spec §10 Business A); website-quality checks (viewport/metadata/contact form/slow) are **skipped** when there's no site to check; `unavailable` sites short-circuit to +30 only. The "Active business +10" line from spec §10's worked example (40+15+15+10 = 80) is missing from the §9 rule table — implemented as a bonus when the provider record has a phone or address, recorded in ARCHITECTURE.md §7.
+
+**Done when:** Scoring matches the two worked examples in spec §10 (Business A ≈ 80, Business B ≈ 12). ✅ Verified: Business A → 80 🔥 exactly; Business B → 10 🟢 (the spec's ≈12 has no rule-table source); 20 unit tests in `tests/opportunity-score.test.ts`.
 
 ---
 

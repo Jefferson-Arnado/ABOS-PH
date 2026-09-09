@@ -18,7 +18,7 @@ import {
   extractTitle,
 } from "./features";
 
-export interface AnalyzeWebsiteOptions extends WebsiteCheckOptions {}
+export type AnalyzeWebsiteOptions = WebsiteCheckOptions;
 
 /**
  * Analyze one website URL end-to-end. Never throws: unreachable sites

@@ -162,10 +162,6 @@ describe("osmProvider.search", () => {
   });
 
   it("retries once on 429 then succeeds", async () => {
-    const responses = [
-      { ok: false, status: 429, body: undefined },
-      okJson(fixture),
-    ];
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: false, status: 429, json: async () => undefined } as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => fixture } as Response);
@@ -232,7 +228,7 @@ describe("osmProvider.getDetails", () => {
     const b = await provider.getDetails("node/1001");
 
     expect(b.name).toBe("ABC Restaurant");
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(decodeURIComponent(String(init.body))).toContain("node(1001);");
   });
 

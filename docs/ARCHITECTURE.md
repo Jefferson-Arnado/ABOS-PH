@@ -195,8 +195,15 @@ interface OpportunityResult {
 | No contact form | +5 |
 | Missing metadata | +5 |
 | Slow website | +10 |
+| Active business (phone/address on file) | +10 |
 
-Sum → normalize to **0–100** → tier (`high` / `medium` / `low`). The emitted `issues[]` drives UI badges and the AI prompt.
+Sum → normalize to **0–100** → tier (`high` ≥ 70 / `medium` ≥ 40 / `low`). The emitted `issues[]` drives UI badges and the AI prompt.
+
+Rule interactions (spec §10 worked examples):
+
+- **No website** (+40) is mutually exclusive with the website-quality checks — booking/ordering count as missing (+15 each, Business A: 40+15+15+10 bonus = 80 🔥); viewport/metadata/contact-form/slow checks are skipped (nothing to check).
+- **Unavailable/broken** (+30) short-circuits the per-feature penalties — the site exists but told us nothing reliable.
+- The "Active business +10" appears in spec §10's worked example but not the §9 table; implemented as a bonus when the provider record has a phone or address, so Business A lands on exactly 80.
 
 ## 8. AI usage policy (cost control)
 
