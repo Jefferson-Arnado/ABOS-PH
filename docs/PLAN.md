@@ -17,7 +17,7 @@
 | 2 | Business data provider (OSM) | ✅ Done (2026-09-09) |
 | 3 | Website detection & analyzer | ✅ Done (2026-09-09) |
 | 4 | Opportunity scoring engine | ✅ Done (2026-09-10) |
-| 5 | Scan pipeline & API | 🔶 Mostly done (2026-09-10) — DB persistence deferred |
+| 5 | Scan pipeline & API | ✅ Done (2026-09-10) — DB persistence live |
 | 6 | UI — Search screen | ☐ Not started |
 | 7 | UI — Results dashboard & detail page | ☐ Not started |
 | 8 | Leads & CSV export | ☐ Not started |
@@ -122,7 +122,16 @@
 - [x] `GET /api/scans/:id` — scan metadata + summary + scored businesses (404 when unknown)
 - [x] `GET /api/businesses` — filters: `minScore`/`maxScore`, `category`, `tier`, `websiteStatus` (`no_website`/`weak_website`/`has_website`), `location` substring, `limit`/`offset` — over the most recent scan
 - [x] `POST /api/businesses/:id/analyze` — run/re-run website analysis for one business, rescore, recompute summary
-- [ ] Persist businesses + analyses (upsert on re-scan) — **deferred by user decision (2026-09-10)**: `@supabase/supabase-js` not installed yet; scans live in the in-memory store `lib/scanning/store.ts` (lost on restart; per-serverless). Swap point: `saveScan`/`getScan` → `lib/supabase/` helpers + insert into `business_analysis` (1:N history)
+- [x] Persist businesses + analyses (upsert on re-scan) — initially deferred (2026-09-10), then implemented the same day (user approved installing `@supabase/supabase-js` v2.116):
+
+  - **Migration `0002_scan_linkage.sql`** (user-approved schema change): `scan_businesses` join table (PK `scan_id, business_id`, score/tier snapshot, `analysis_id` FK) so `GET /api/scans/:id` reconstructs exactly what a scan produced; `business_analysis` + `issues` / `response_time_ms` / `unavailable` columns (score inputs must be stored to reproduce scores); `latest_business_analysis` view (`distinct on`, `security_invoker`) for "latest row wins".
+  - **Dev-user ownership** (user decision): scans owned by `DEV_USER_ID` until Phase 6 auth — seed via `node --env-file=.env.local scripts/seed-dev-user.mjs` (service-role, idempotent).
+  - **`lib/supabase/`**: `server.ts` (cached service-role client, server-only) · `mappers.ts` (pure row↔domain mappers, 7 unit tests) · `persist.ts` (`persistScan`: scan insert → businesses upsert on `(source, source_id)` → analysis history insert → chunked join rows; `getScanById` join query; `queryBusinesses` on the view; `insertAnalysis`).
+  - **Routes rewired to DB**: `POST /api/scans` (503 when persistence unconfigured, fail-fast before the ~30s pipeline) · `GET /api/scans/:id` · `GET /api/businesses` (score/tier filters in PostgREST; weak-website predicate in-process) · `POST /api/businesses/:id/analyze` (inserts a new history row). In-memory store retained for tests only.
+
+  ⚠️ Apply migration 0002 via SQL Editor before running scans (see checklist item in Phase 10 notes). ✅ **Applied & verified live 2026-09-10**: scan → `GET /api/scans/:id` reconstructs all 1,705 businesses with snapshot scores/issues from the join rows; re-scan dedup (businesses stable at 1,705, `business_analysis` history 1,705 → 3,410); filters exact (tier=low 24, tier=medium 6, has_website 37, no_website 1,668, weak_website 10, minScore=80 → 607); re-analyze appends history (3 → 4 rows) and the view serves the latest.
+
+  Live-verified fixes from that run: PostgREST default 1,000-row cap → paginated `getScanById`; snake_case PostgREST payloads (typed `AnalysisRowSnake` mapper — the camelCase `db.ts` row types are app-side views, not wire format); score/tier/website filters pushed into PostgREST (weak-website via `or()` with `is.true`/`is.false`); analysis inserts batched (200/chunk with per-row fallback); analyze route accepts DB UUID **or** URL-encoded provider id.
 - [x] Error handling & basic request validation (zod) — invalid JSON/body/query → 400; `ProviderError` → 502; unexpected → 500
 
 **Done when:** An API call with Davao City/Restaurants/10km returns scored businesses end-to-end (acceptance Tests #1–#4). 🔶 Pipeline verified via 10 integration tests with mocked provider/analyzer (incl. scoring/sort/summary, concurrency cap, failure isolation, empty scan). ✅ **Verified live 2026-09-10** via curl against `next dev`: Davao/Restaurants/10km → 1,705 businesses scored in ~31s (acceptance Tests #1–#4); filters (`no_website` 1,668, `tier=high` 1,675), re-analyze, and error paths (400/404) all correct.

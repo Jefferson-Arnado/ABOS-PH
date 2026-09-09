@@ -1,11 +1,11 @@
 /**
  * POST /api/scans — run a scan (spec §20). Validates the request, executes
- * the pipeline (search → analyze → score), stores the result in memory and
- * returns the scan id + summary counts for the dashboard.
+ * the pipeline (search → analyze → score), persists everything to Supabase
+ * (scans + businesses upsert + business_analysis + scan_businesses join)
+ * and returns the scan id + summary.
  *
- * Persistence note: results live in the in-memory store (lib/scanning/store)
- * for this MVP iteration; swapping to Supabase persistence touches only
- * saveScan/getScan.
+ * Scan ownership uses DEV_USER_ID until Phase 6 auth lands (user decision
+ * 2026-09-10, scripts/seed-dev-user.mjs).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,7 +13,8 @@ import { z } from "zod";
 import { CATEGORIES } from "@/types/business";
 import { ProviderError } from "@/lib/business-providers/types";
 import { runScan } from "@/lib/scanning/pipeline";
-import { makeScanId, saveScan } from "@/lib/scanning/store";
+import { getDevUserId, getSupabaseAdmin } from "@/lib/supabase/server";
+import { persistScan } from "@/lib/supabase/persist";
 
 export const dynamic = "force-dynamic";
 
@@ -44,32 +45,26 @@ export async function POST(request: NextRequest) {
 
   const params = parsed.data;
 
+  // Fail fast (before the ~30s pipeline) when persistence isn't configured.
   try {
-    const startedAt = Date.now();
-    const result = await runScan(params);
-    const id = makeScanId();
-
-    saveScan({
-      record: {
-        id,
-        userId: "anonymous", // auth + user-scoped scans arrive with Supabase persistence
-        location: params.location,
-        latitude: params.latitude,
-        longitude: params.longitude,
-        radius: params.radius,
-        category: params.category,
-        createdAt: new Date().toISOString(),
-      },
-      businesses: result.businesses,
-      summary: result.summary,
-    });
-
+    getSupabaseAdmin();
+    getDevUserId();
+  } catch (err) {
     return NextResponse.json(
       {
-        scanId: id,
-        summary: result.summary,
-        elapsedMs: Date.now() - startedAt,
+        error: "Persistence not configured",
+        detail: err instanceof Error ? err.message : String(err),
       },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const result = await runScan(params);
+    const record = await persistScan(params, getDevUserId(), result.businesses);
+
+    return NextResponse.json(
+      { scanId: record.id, summary: result.summary },
       { status: 201 }
     );
   } catch (err) {

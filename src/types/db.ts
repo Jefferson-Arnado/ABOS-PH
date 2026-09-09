@@ -59,6 +59,12 @@ export interface BusinessAnalysisRow {
   contactForm: boolean | null;
   opportunityScore: number;
   opportunityTier: OpportunityTier;
+  /** Issue list snapshot (migration 0002, jsonb). */
+  issues: string[] | null;
+  /** Page response time in ms (migration 0002). */
+  responseTimeMs: number | null;
+  /** True when the site could not be fetched (migration 0002). */
+  unavailable: boolean | null;
   analysis: unknown | null;
   createdAt: IsoDateTime;
 }
