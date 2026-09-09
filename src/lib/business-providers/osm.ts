@@ -139,49 +139,53 @@ export function createOsmProvider(
   const retryDelayMs = options.retryDelayMs ?? 2_000;
 
   async function queryOverpass(query: string): Promise<OverpassResponse> {
-    const attempt = async (): Promise<Response> => {
-      const res = await fetchImpl(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": userAgent,
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      return res;
-    };
+    let lastError: unknown;
 
-    let res: Response;
-    try {
-      res = await attempt();
-      // Overpass asks failing clients to back off; retry once, politely.
-      if (res.status === 429 || res.status === 504) {
-        await new Promise((r) => setTimeout(r, retryDelayMs));
-        res = await attempt();
+    // Two attempts total: network blips and 429/504 backoffs are common with
+    // the free Overpass instance, so retry once before giving up.
+    for (let attemptNo = 1; attemptNo <= 2; attemptNo++) {
+      if (attemptNo > 1) await new Promise((r) => setTimeout(r, retryDelayMs));
+      try {
+        const res = await fetchImpl(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": userAgent,
+          },
+          body: `data=${encodeURIComponent(query)}`,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+
+        if (res.ok) {
+          try {
+            return (await res.json()) as OverpassResponse;
+          } catch (err) {
+            throw new ProviderError("Overpass returned invalid JSON", "osm", err);
+          }
+        }
+
+        if (res.status === 429 || res.status === 504) {
+          lastError = new ProviderError(`Overpass returned HTTP ${res.status}`, "osm");
+          continue; // worth a retry
+        }
+
+        throw new ProviderError(`Overpass returned HTTP ${res.status}`, "osm");
+      } catch (err) {
+        // Non-retryable failures (4xx/5xx other than 429/504, bad JSON) rethrow.
+        if (err instanceof ProviderError && !err.message.includes("HTTP 429") && !err.message.includes("HTTP 504")) {
+          throw err;
+        }
+        lastError = err;
       }
-    } catch (err) {
-      throw new ProviderError(
-        err instanceof Error && err.name === "TimeoutError"
-          ? `Overpass request timed out after ${timeoutMs}ms`
-          : "Overpass request failed",
-        "osm",
-        err
-      );
     }
 
-    if (!res.ok) {
-      throw new ProviderError(
-        `Overpass returned HTTP ${res.status}`,
-        "osm"
-      );
-    }
-
-    try {
-      return (await res.json()) as OverpassResponse;
-    } catch (err) {
-      throw new ProviderError("Overpass returned invalid JSON", "osm", err);
-    }
+    throw new ProviderError(
+      lastError instanceof Error && lastError.name === "TimeoutError"
+        ? `Overpass request timed out after ${timeoutMs}ms (retried once)`
+        : "Overpass request failed (retried once)",
+      "osm",
+      lastError
+    );
   }
 
   return {

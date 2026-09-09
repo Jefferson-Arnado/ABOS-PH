@@ -197,8 +197,12 @@ describe("osmProvider.search", () => {
     const fetchMock = vi.fn(async () => {
       throw new Error("network down");
     });
-    const provider = createOsmProvider({ fetchImpl: fetchMock as unknown as typeof fetch });
+    const provider = createOsmProvider({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      retryDelayMs: 1,
+    });
     await expect(provider.search(PARAMS)).rejects.toBeInstanceOf(ProviderError);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // network blips get one retry
   });
 
   it("throws ProviderError on invalid JSON", async () => {
