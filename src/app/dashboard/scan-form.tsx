@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LoaderCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -185,7 +186,14 @@ export function ScanForm({ categories, locations, radii }: ScanFormProps) {
         className="w-full"
         disabled={scanning || !location || !category}
       >
-        {scanning ? "🔍 Scanning businesses… (this takes ~30s)" : "🔍 Scan Businesses"}
+        {scanning ? (
+          <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        ) : (
+          <Search className="size-4" aria-hidden />
+        )}
+        {scanning
+          ? "Scanning businesses… (this takes ~30s)"
+          : "Scan Businesses"}
       </Button>
       {scanning && (
         <p className="text-center text-xs text-muted-foreground">

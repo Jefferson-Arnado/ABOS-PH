@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import { Globe, SearchX } from "lucide-react";
 import { getSessionUser } from "@/lib/supabase/clients";
 import { getScanById } from "@/lib/supabase/persist";
+import { TierIcon } from "@/components/tier-icon";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Scan results — Opportunity Scanner" };
@@ -37,20 +39,33 @@ export default async function ScanResultsPage({
       </div>
 
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          ["Businesses found", summary.businessesFound],
-          ["Opportunities", summary.opportunities],
-          ["🔥 High", summary.high],
-          ["🟡 Medium", summary.medium],
-          ["🟢 Low", summary.low],
-          ["No website", summary.noWebsite],
-          ["Weak website", summary.weakWebsite],
-        ].map(([label, value]) => (
-          <div key={label as string} className="rounded-lg border p-4">
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="text-2xl font-semibold">{value}</dd>
-          </div>
-        ))}
+        {
+          [
+            { label: "Businesses found", value: summary.businessesFound },
+            { label: "Opportunities", value: summary.opportunities },
+            { label: "High", value: summary.high, icon: <TierIcon tier="high" /> },
+            { label: "Medium", value: summary.medium, icon: <TierIcon tier="medium" /> },
+            { label: "Low", value: summary.low, icon: <TierIcon tier="low" /> },
+            {
+              label: "No website",
+              value: summary.noWebsite,
+              icon: <SearchX className="size-4 text-muted-foreground" />,
+            },
+            {
+              label: "Weak website",
+              value: summary.weakWebsite,
+              icon: <Globe className="size-4 text-muted-foreground" />,
+            },
+          ].map(({ label, value, icon }) => (
+            <div key={label} className="rounded-lg border p-4">
+              <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {icon}
+                {label}
+              </dt>
+              <dd className="text-2xl font-semibold">{value}</dd>
+            </div>
+          ))
+        }
       </dl>
 
       <section className="space-y-3">
@@ -61,12 +76,15 @@ export default async function ScanResultsPage({
               key={scored.business.id}
               className="flex items-center justify-between gap-4 px-4 py-3"
             >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{scored.business.name}</p>
-                <p className="truncate text-sm text-muted-foreground">
-                  {scored.opportunity.issues.slice(0, 3).join(" · ") ||
-                    "Strong online presence"}
-                </p>
+              <div className="flex min-w-0 items-center gap-3">
+                <TierIcon tier={scored.opportunity.tier} />
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{scored.business.name}</p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {scored.opportunity.issues.slice(0, 3).join(" · ") ||
+                      "Strong online presence"}
+                  </p>
+                </div>
               </div>
               <span className="shrink-0 font-mono text-sm">
                 {scored.opportunity.score}
