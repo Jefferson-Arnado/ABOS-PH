@@ -18,7 +18,7 @@
 | 3 | Website detection & analyzer | ✅ Done (2026-09-09) |
 | 4 | Opportunity scoring engine | ✅ Done (2026-09-10) |
 | 5 | Scan pipeline & API | ✅ Done (2026-09-10) — DB persistence live |
-| 6 | UI — Search screen | ☐ Not started |
+| 6 | UI — Search screen | ✅ Done (2026-09-10) — incl. auth, pulled forward |
 | 7 | UI — Results dashboard & detail page | ☐ Not started |
 | 8 | Leads & CSV export | ☐ Not started |
 | 9 | AI opportunity analysis (top prospects) | ☐ Not started |
@@ -140,14 +140,19 @@
 
 ---
 
-## Phase 6 — UI — Search screen
+## Phase 6 — UI — Search screen ✅
 
-- [ ] Search form (spec §3): Location, Category dropdown (10 V1 categories), Radius dropdown, Opportunity Type checkboxes
-- [ ] "[ 🔍 Scan Businesses ]" button → triggers `POST /api/scans`, shows loading state
-- [ ] Basic auth via Supabase (email login) — enough to scope scans/leads to a user
-- [ ] Redirect to results view when the scan completes
+- [x] Search form (spec §3): Location, Category dropdown (10 V1 categories), Radius dropdown, Opportunity Type checkboxes — `dashboard/page.tsx` + `dashboard/scan-form.tsx` (presets for 5 PH cities per spec §4 "no map in V1"; first 3 opportunity types pre-checked; types ride to the results URL for Phase 7 filters)
+- [x] "[ 🔍 Scan Businesses ]" button → triggers `POST /api/scans`, shows loading state — disabled + "Scanning businesses…" copy (~30s expectation set)
+- [x] Basic auth via Supabase email login — **implemented now** (user decision: "auth first, per plan"), pulled forward from this checklist into the API work:
+  - `@supabase/ssr` v0.12.7 cookie sessions; `lib/supabase/clients.ts` (browser/server/proxy clients + `getSessionUser`)
+  - **Next 16 change:** `middleware` → `proxy` (`src/proxy.ts`, Node runtime) — refreshes the auth cookie on every request; page routes redirect to `/login?next=…` when unauthenticated
+  - `/login` with sign-in + create-account (server actions, zod-validated, `useActionState` pending/error states); `/auth/confirm` exchanges the email-confirmation code; `signout` server action in the dashboard header
+  - `POST /api/scans` → **401** without a session; scans owned by the session user (verified live: scan row `user_id` = authenticated user id); `dashboard/layout.tsx` + scan page enforce ownership (RLS mirrors it)
+  - Dev-user workaround retired for API routes (`getDevUserId` no longer used for scan ownership; seeding script kept for local testing)
+- [x] Redirect to results view when the scan completes — `router.push(/dashboard/scans/{id})` → minimal results page (summary cards + top 10 prospects; full dashboard is Phase 7)
 
-**Done when:** A user can submit the form and land on results.
+**Done when:** A user can submit the form and land on results. ✅ Verified: typecheck/lint/77 tests/build ✓; live: unauthenticated `/dashboard` → 307 `/login?next=…`, unauthenticated `POST /api/scans` → 401, login page renders, authenticated scan persists under the session user. ⚠️ curl note: the Supabase session cookie is chunked (`sb-*-auth-token.0/.1`, ≤3180 bytes/chunk) — a raw access token in a single cookie is not a session; test through the real login flow.
 
 ---
 

@@ -4,8 +4,8 @@
  * (scans + businesses upsert + business_analysis + scan_businesses join)
  * and returns the scan id + summary.
  *
- * Scan ownership uses DEV_USER_ID until Phase 6 auth lands (user decision
- * 2026-09-10, scripts/seed-dev-user.mjs).
+ * Auth (Phase 6): requires a session; the scan is owned by the session
+ * user — never a client-supplied id (docs/AGENTS.md §2 rule 5).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,7 +13,8 @@ import { z } from "zod";
 import { CATEGORIES } from "@/types/business";
 import { ProviderError } from "@/lib/business-providers/types";
 import { runScan } from "@/lib/scanning/pipeline";
-import { getDevUserId, getSupabaseAdmin } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/clients";
 import { persistScan } from "@/lib/supabase/persist";
 
 export const dynamic = "force-dynamic";
@@ -45,10 +46,19 @@ export async function POST(request: NextRequest) {
 
   const params = parsed.data;
 
+  // Auth: 401 before doing any work. NOTE for curl testing: the Supabase
+  // session cookie is chunked (sb-*-auth-token.0/.1, ≤3180 bytes per chunk
+  // per the @supabase/ssr chunker). A raw access token stuffed into a
+  // single cookie is NOT a valid session — exercise the real flow through
+  // the login page/server action instead.
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   // Fail fast (before the ~30s pipeline) when persistence isn't configured.
   try {
     getSupabaseAdmin();
-    getDevUserId();
   } catch (err) {
     return NextResponse.json(
       {
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runScan(params);
-    const record = await persistScan(params, getDevUserId(), result.businesses);
+    const record = await persistScan(params, user.id, result.businesses);
 
     return NextResponse.json(
       { scanId: record.id, summary: result.summary },
