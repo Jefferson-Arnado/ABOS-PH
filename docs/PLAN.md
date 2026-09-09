@@ -1,0 +1,224 @@
+# 📋 AI Business Opportunity Scanner — MVP Implementation Plan
+
+> **Doc suite:** [PRD](./PRD.md) · [Architecture](./ARCHITECTURE.md) · Plan · [Agent rules](./AGENTS.md) · [Full spec](./ai-business-opportunity-scanner-mvp.md)
+>
+> **Goal:** Find local businesses with weak/missing online presence, score the opportunity (0–100), and give freelancers a reason to contact them.
+>
+> **Stack ($0):** Next.js + TypeScript · Tailwind + shadcn/ui · Supabase (DB + Auth) · OSM/Overpass (business data) · Ollama → OpenAI (AI) · Vitest (tests)
+
+---
+
+## Progress tracker
+
+| Phase | Description | Status |
+|---|---|---|
+| 0 | Project setup | ✅ Done (2026-09-09) |
+| 1 | Data model & database | ☐ Not started |
+| 2 | Business data provider (OSM) | ☐ Not started |
+| 3 | Website detection & analyzer | ☐ Not started |
+| 4 | Opportunity scoring engine | ☐ Not started |
+| 5 | Scan pipeline & API | ☐ Not started |
+| 6 | UI — Search screen | ☐ Not started |
+| 7 | UI — Results dashboard & detail page | ☐ Not started |
+| 8 | Leads & CSV export | ☐ Not started |
+| 9 | AI opportunity analysis (top prospects) | ☐ Not started |
+| 10 | Testing & acceptance | ☐ Not started |
+
+---
+
+## Phase 0 — Project setup ✅
+
+- [x] Scaffold Next.js app (TypeScript, App Router, `src/` directory) — Next 16, React 19
+- [x] Install & configure Tailwind CSS + shadcn/ui (radix base, nova preset; button/input/label/select/checkbox/card/badge/tabs/table/textarea)
+- [x] Set up ESLint + Prettier (`.prettierrc`, printWidth 100)
+- [x] Set up Vitest for unit tests + `npm run test` / `npm run typecheck` scripts (node env, `@/` alias, `tests/`)
+- [ ] Create Supabase project (free tier) & add env vars (`.env.local`, `.env.example`) — *`.env.example` + `.env.local` templates ready; awaiting Supabase credentials*
+- [x] Add `src/` folder structure per spec §21 (`app/`, `components/`, `lib/`, `types/`) — `lib/utils.ts` + `components/ui/` seeded
+- [x] Init git repo, first commit, README with setup instructions
+
+**Done when:** `npm run dev` serves a blank app; `npm run test` and `npm run typecheck` pass. ✅ Verified: typecheck ✓ · smoke test ✓ · production build ✓
+
+---
+
+## Phase 1 — Data model & database
+
+- [ ] Define TypeScript types: `Business`, `ScanParams`, `WebsiteAnalysis`, `OpportunityScore`, `Lead` (`src/types/`)
+- [ ] Create Supabase schema (SQL migration):
+  - [ ] `profiles` (id, email, name, created_at)
+  - [ ] `scans` (id, user_id, location, latitude, longitude, radius, category, created_at)
+  - [ ] `businesses` (id, name, category, address, lat, lng, phone, website, source, source_id, created_at, updated_at)
+  - [ ] `business_analysis` (id, business_id, website_exists, website_status, https, mobile_friendly, booking_available, ordering_available, contact_form, opportunity_score, analysis, created_at)
+  - [ ] `leads` (id, user_id, business_id, status, notes, created_at, updated_at)
+- [ ] Add unique constraint on `businesses(source, source_id)` to avoid duplicates
+- [ ] Seed/dedup logic: upsert businesses on re-scan
+- [ ] Lead statuses enum: `New | Contacted | Interested | Proposal | Won | Lost`
+
+**Done when:** Migration applies cleanly to Supabase; types match schema.
+
+---
+
+## Phase 2 — Business data provider (OSM)
+
+- [ ] Define `BusinessProvider` interface: `search(params): Promise<Business[]>`, `getDetails(id): Promise<Business>` (spec §22)
+- [ ] Implement `OpenStreetMapProvider` using Overpass API:
+  - [ ] Query by lat/lng + radius + category (restaurant, clinic, salon, gym, etc.)
+  - [ ] Map OSM tags → normalized `Business` (name, address, phone, website, lat/lng)
+  - [ ] Handle timeout / rate limiting / empty results gracefully
+- [ ] Provider factory via env var `BUSINESS_PROVIDER=osm` (swap to `google` later without app changes)
+- [ ] Map the 10 V1 categories → OSM tag filters
+
+**Done when:** A manual test query for "Davao City · Restaurants · 10km" returns normalized businesses.
+
+---
+
+## Phase 3 — Website detection & analyzer
+
+- [ ] Website check (`lib/website-analyzer/analyzer.ts`):
+  - [ ] HTTP request: status code, HTTPS, redirects, response time
+  - [ ] Result shape: `{ websiteExists, statusCode, https, responseTime }`
+  - [ ] Handle unreachable sites (no crash → "unavailable/broken")
+- [ ] HTML analysis (`lib/website-analyzer/features.ts`):
+  - [ ] Content: title, meta description, phone, email, address
+  - [ ] Mobile: viewport meta tag
+  - [ ] Functionality keywords: booking / appointment / reservation / order / shop / cart / payment / contact form
+- [ ] Output structured `WebsiteAnalysis` with per-check pass/fail/warn
+
+**Done when:** Given a list of real URLs, the analyzer returns correct pass/fail checks (verified with unit tests, Phase 10).
+
+---
+
+## Phase 4 — Opportunity scoring engine
+
+- [ ] Implement deterministic rule-based scoring (`lib/scoring/opportunity-score.ts`) — **no AI here** (spec §9):
+
+  | Condition | Points |
+  |---|---|
+  | No website | +40 |
+  | Website unavailable/broken | +30 |
+  | No mobile viewport | +15 |
+  | No booking | +15 |
+  | No online ordering | +15 |
+  | No contact form | +5 |
+  | Missing metadata | +5 |
+  | Slow website | +10 |
+
+- [ ] Normalize final score to **0–100**
+- [ ] Map score → tier: 🔥 HIGH / 🟡 MEDIUM / 🟢 LOW
+- [ ] Emit the issue list (e.g. `["No website", "No online ordering"]`) used by UI + AI later
+
+**Done when:** Scoring matches the two worked examples in spec §10 (Business A ≈ 80, Business B ≈ 12).
+
+---
+
+## Phase 5 — Scan pipeline & API
+
+- [ ] Wire the pipeline: **Search → Normalize → Website check → Analyze → Score → Results**
+- [ ] `POST /api/scans` — accepts `{ latitude, longitude, radius, category }`, creates a scan record, runs the pipeline, returns scan id
+- [ ] `GET /api/scans/:id` — scan metadata + summary counts (businesses found, opportunities)
+- [ ] `GET /api/businesses` — filters: score, category, website status, location
+- [ ] `POST /api/businesses/:id/analyze` — run/re-run website analysis for one business
+- [ ] Persist businesses + analyses (upsert on re-scan)
+- [ ] Error handling & basic request validation (zod)
+
+**Done when:** An API call with Davao City/Restaurants/10km returns scored businesses end-to-end (acceptance Tests #1–#4).
+
+---
+
+## Phase 6 — UI — Search screen
+
+- [ ] Search form (spec §3): Location, Category dropdown (10 V1 categories), Radius dropdown, Opportunity Type checkboxes
+- [ ] "[ 🔍 Scan Businesses ]" button → triggers `POST /api/scans`, shows loading state
+- [ ] Basic auth via Supabase (email login) — enough to scope scans/leads to a user
+- [ ] Redirect to results view when the scan completes
+
+**Done when:** A user can submit the form and land on results.
+
+---
+
+## Phase 7 — UI — Results dashboard & business detail
+
+- [ ] Results dashboard (spec §13):
+  - [ ] Header: `Davao City · Restaurants · 10 km` + counts (247 found / 43 opportunities)
+  - [ ] Filter tabs: `All | High | Medium | No Website`
+  - [ ] Sort by Opportunity Score
+  - [ ] Business cards: score badge, location, issues (❌/⚠️), `[View Analysis]` `[Save Lead]`
+- [ ] Business detail page (spec §14):
+  - [ ] Score `92/100` + tier banner
+  - [ ] Business info (category, location, phone, website, source)
+  - [ ] Problems list, Recommended services, AI Analysis section
+- [ ] Empty / loading / error states for all views
+
+**Done when:** Acceptance Tests #5–#6 pass (filter + detail view).
+
+---
+
+## Phase 8 — Leads & CSV export
+
+- [ ] `POST /api/leads` — Save Lead (business → `leads` with status `New`)
+- [ ] `PATCH /api/leads/:id` — update status/notes
+- [ ] My Leads dashboard (spec §16): totals by status (`New / Contacted / Interested / Proposal / Won / Lost`)
+- [ ] `GET /api/leads/export` — CSV export (`Business, Category, Phone, Website, Score, Opportunity`)
+- [ ] Dedup: saving the same business twice doesn't create duplicate leads
+
+**Done when:** Acceptance Tests #7–#8 pass (Save Lead + CSV export).
+
+---
+
+## Phase 9 — AI opportunity analysis (top prospects only)
+
+- [ ] Define `AIProvider` interface (`analyzeBusiness(data): Promise<Analysis>`) — spec §23
+- [ ] Implement `OllamaProvider` (local, dev) + stub `OpenAIProvider` for later; selected via env var
+- [ ] **Cost control:** AI runs only for the **top 20** scored prospects — never per-business during scan (spec §11)
+- [ ] `POST /api/businesses/:id/ai-analysis` — generate "Why this is a good prospect", potential services, sales angle (spec §12)
+- [ ] Store generated analysis in `business_analysis.analysis`
+- [ ] Optional V1.5: "Generate Outreach" email draft with `[Copy Message]` (no auto-sending)
+
+**Done when:** Acceptance Test #9 passes (top leads get AI-generated explanation).
+
+---
+
+## Phase 10 — Testing & acceptance
+
+### Testing strategy
+
+- [ ] **Unit tests (Vitest)** — pure logic, mocked I/O:
+  - [ ] Scoring: every rule, edge cases (no website → website checks skipped), 0–100 normalization, tier mapping, spec §10 examples
+  - [ ] Website analyzer: parse HTML fixtures (with/without viewport, booking keywords, contact info); unreachable-site handling
+  - [ ] Normalization: OSM payload → `Business`
+  - [ ] CSV export: header + row formatting
+- [ ] **Integration tests (API routes):**
+  - [ ] `POST /api/scans` with mocked provider/analyzer → persisted businesses + scores
+  - [ ] Save lead, update lead, duplicate-save rejection
+  - [ ] Filters & sorting on `GET /api/businesses`
+- [ ] **Fixtures:** sample Overpass JSON responses + sample HTML pages under `tests/fixtures/`
+- [ ] **E2E smoke (manual or Playwright, minimal):** search → scan → results → detail → save lead → export CSV
+
+### MVP acceptance criteria (spec §26)
+
+- [ ] **Test #1** — Input Davao City / Restaurants / 10km → system returns businesses found
+- [ ] **Test #2** — Each business gets `Website exists` or `No website`
+- [ ] **Test #3** — Businesses with websites get a website analysis
+- [ ] **Test #4** — Every business receives an Opportunity Score 0–100
+- [ ] **Test #5** — User can filter: No Website / High Opportunity / Weak Website
+- [ ] **Test #6** — User can open Business → Detailed Analysis
+- [ ] **Test #7** — User can Save Lead
+- [ ] **Test #8** — User can Export CSV
+- [ ] **Test #9** — Top leads receive an AI-generated sales explanation
+
+**Done when:** All 9 acceptance tests pass + `npm run test` and `npm run typecheck` are green.
+
+---
+
+## 🚫 Out of scope (do NOT build in MVP)
+
+Email automation · SMS · Full CRM · Stripe · Team accounts · Advanced analytics · Mobile app · Browser extension · AI chatbot · Automated cold outreach · Complex maps · Enterprise permissions (spec §27)
+
+## 🛣️ After first paying customer
+
+Google Places API → Paid AI API → Custom domain → Better hosting → More data (reviews, SEO, PageSpeed) → Real prospecting platform (spec §28)
+
+## ⚠️ Guardrails
+
+- **Never scrape Google Maps HTML** — use proper APIs/providers with terms that allow the intended use (spec §25)
+- Keep providers interchangeable: `BUSINESS_PROVIDER` and `AI_PROVIDER` env vars
+- Don't call AI per-business during scans — rule-based scoring first, AI for top 20 only

@@ -1,0 +1,18 @@
+{
+    "sourceFile": "README.md",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1788913259971,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1788913259971,
+            "name": "Commit-0",
+            "content": "# AI Business Opportunity Scanner\n\nFind local businesses with weak or missing online presence, score the opportunity (0–100), and give freelance web devs a reason to contact them.\n\n## Documentation\n\nAll project docs live in [`docs/`](./docs):\n\n| Doc | Purpose |\n|---|---|\n| [PRD.md](./docs/PRD.md) | What we're building — problem, users, scope, success criteria |\n| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Tech stack, data flow, components, data model |\n| [PLAN.md](./docs/PLAN.md) | Step-by-step implementation checklist (phases 0–10) |\n| [AGENTS.md](./docs/AGENTS.md) | Rules for AI coding agents working in this repo |\n| [ai-business-opportunity-scanner-mvp.md](./docs/ai-business-opportunity-scanner-mvp.md) | Original full MVP spec |\n\nStart with `docs/PLAN.md` to see current progress.\n"
+        }
+    ]
+}
