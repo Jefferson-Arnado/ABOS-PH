@@ -17,7 +17,7 @@
 | 2 | Business data provider (OSM) | ✅ Done (2026-09-09) |
 | 3 | Website detection & analyzer | ✅ Done (2026-09-09) |
 | 4 | Opportunity scoring engine | ✅ Done (2026-09-10) |
-| 5 | Scan pipeline & API | ☐ Not started |
+| 5 | Scan pipeline & API | 🔶 Mostly done (2026-09-10) — DB persistence deferred |
 | 6 | UI — Search screen | ☐ Not started |
 | 7 | UI — Results dashboard & detail page | ☐ Not started |
 | 8 | Leads & CSV export | ☐ Not started |
@@ -115,17 +115,19 @@
 
 ---
 
-## Phase 5 — Scan pipeline & API
+## Phase 5 — Scan pipeline & API 🔶
 
-- [ ] Wire the pipeline: **Search → Normalize → Website check → Analyze → Score → Results**
-- [ ] `POST /api/scans` — accepts `{ latitude, longitude, radius, category }`, creates a scan record, runs the pipeline, returns scan id
-- [ ] `GET /api/scans/:id` — scan metadata + summary counts (businesses found, opportunities)
-- [ ] `GET /api/businesses` — filters: score, category, website status, location
-- [ ] `POST /api/businesses/:id/analyze` — run/re-run website analysis for one business
-- [ ] Persist businesses + analyses (upsert on re-scan)
-- [ ] Error handling & basic request validation (zod)
+- [x] Wire the pipeline: **Search → Normalize → Website check → Analyze → Score → Results** — `lib/scanning/pipeline.ts` (provider + analyzer injectable; 8-way analysis concurrency; one failing site never crashes a scan)
+- [x] `POST /api/scans` — accepts `{ location, latitude, longitude, radius, category }` (zod-validated), runs the pipeline, returns `{ scanId, summary, elapsedMs }` (201)
+- [x] `GET /api/scans/:id` — scan metadata + summary + scored businesses (404 when unknown)
+- [x] `GET /api/businesses` — filters: `minScore`/`maxScore`, `category`, `tier`, `websiteStatus` (`no_website`/`weak_website`/`has_website`), `location` substring, `limit`/`offset` — over the most recent scan
+- [x] `POST /api/businesses/:id/analyze` — run/re-run website analysis for one business, rescore, recompute summary
+- [ ] Persist businesses + analyses (upsert on re-scan) — **deferred by user decision (2026-09-10)**: `@supabase/supabase-js` not installed yet; scans live in the in-memory store `lib/scanning/store.ts` (lost on restart; per-serverless). Swap point: `saveScan`/`getScan` → `lib/supabase/` helpers + insert into `business_analysis` (1:N history)
+- [x] Error handling & basic request validation (zod) — invalid JSON/body/query → 400; `ProviderError` → 502; unexpected → 500
 
-**Done when:** An API call with Davao City/Restaurants/10km returns scored businesses end-to-end (acceptance Tests #1–#4).
+**Done when:** An API call with Davao City/Restaurants/10km returns scored businesses end-to-end (acceptance Tests #1–#4). 🔶 Pipeline verified via 10 integration tests with mocked provider/analyzer (incl. scoring/sort/summary, concurrency cap, failure isolation, empty scan). ✅ **Verified live 2026-09-10** via curl against `next dev`: Davao/Restaurants/10km → 1,705 businesses scored in ~31s (acceptance Tests #1–#4); filters (`no_website` 1,668, `tier=high` 1,675), re-analyze, and error paths (400/404) all correct.
+
+  ⚠️ Gotcha for the Phase 6 UI: business ids contain `:` and `/` (e.g. `osm:node/1802759779`) — `encodeURIComponent(id)` is **required** when building `/api/businesses/:id/analyze` URLs, or Next.js serves its HTML 404 for the split path.
 
 ---
 
