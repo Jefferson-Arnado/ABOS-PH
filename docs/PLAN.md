@@ -15,7 +15,7 @@
 | 0 | Project setup | ✅ Done (2026-09-09) |
 | 1 | Data model & database | ✅ Done (2026-09-09) |
 | 2 | Business data provider (OSM) | ✅ Done (2026-09-09) |
-| 3 | Website detection & analyzer | ☐ Not started |
+| 3 | Website detection & analyzer | ✅ Done (2026-09-09) |
 | 4 | Opportunity scoring engine | ☐ Not started |
 | 5 | Scan pipeline & API | ☐ Not started |
 | 6 | UI — Search screen | ☐ Not started |
@@ -72,19 +72,20 @@
 
 ---
 
-## Phase 3 — Website detection & analyzer
+## Phase 3 — Website detection & analyzer ✅
 
-- [ ] Website check (`lib/website-analyzer/analyzer.ts`):
-  - [ ] HTTP request: status code, HTTPS, redirects, response time
-  - [ ] Result shape: `{ websiteExists, statusCode, https, responseTime }`
-  - [ ] Handle unreachable sites (no crash → "unavailable/broken")
-- [ ] HTML analysis (`lib/website-analyzer/features.ts`):
-  - [ ] Content: title, meta description, phone, email, address
-  - [ ] Mobile: viewport meta tag
-  - [ ] Functionality keywords: booking / appointment / reservation / order / shop / cart / payment / contact form
-- [ ] Output structured `WebsiteAnalysis` with per-check pass/fail/warn
+- [x] Website check (`lib/website-analyzer/analyzer.ts`):
+  - [x] HTTP request: status code, HTTPS, redirects (follow), response time (10s default timeout, slow threshold 5s)
+  - [x] Result shape: `{ websiteExists, statusCode, https, responseTimeMs, unavailable, html }`
+  - [x] Handle unreachable sites (no crash → "unavailable/broken") — timeouts/connection failures return a result, never throw
+- [x] HTML analysis (`lib/website-analyzer/features.ts`) — pure string functions:
+  - [x] Content: title, meta description, phone (PH patterns + tel:), email, address hints
+  - [x] Mobile: viewport meta tag with device-width
+  - [x] Functionality keywords: booking/appointment/reservation · order/cart/checkout/foodpanda/grabfood · contact form (form tags + form providers)
+- [x] Output structured `WebsiteAnalysis` with per-check pass/fail/warn (`index.ts` — 8 checks incl. reachability fallback for error pages/non-HTML)
+- [x] Fixtures: modern-site.html (all pass) + weak-site.html (fails correctly) → 13 unit tests
 
-**Done when:** Given a list of real URLs, the analyzer returns correct pass/fail checks (verified with unit tests, Phase 10).
+**Done when:** Given a list of real URLs, the analyzer returns correct pass/fail checks. ✅ Verified live (`RUN_LIVE_TESTS=1`): jollibee.com.ph → 200/HTTPS/252ms with full checks; dead domain → graceful `unavailable` result.
 
 ---
 
