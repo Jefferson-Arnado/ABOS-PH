@@ -224,4 +224,4 @@ Google Places API → Paid AI API → Custom domain → Better hosting → More 
 - **Never scrape Google Maps HTML** — use proper APIs/providers with terms that allow the intended use (spec §25)
 - Keep providers interchangeable: `BUSINESS_PROVIDER` and `AI_PROVIDER` env vars
 - Don't call AI per-business during scans — rule-based scoring first, AI for top 20 only
-- 🧹 **Cleanup before production:** delete `src/app/api/debug/osm/route.ts` (temporary Phase 2 spot-check route)
+- 🧹 **Cleanup before production:** delete `src/app/api/debug/osm/route.ts` and `src/app/api/debug/analyze/route.ts` (temporary spot-check routes, Phases 2–3)
