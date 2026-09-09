@@ -77,8 +77,11 @@ npx supabase db push # apply migrations (requires Supabase env)
 | `OLLAMA_BASE_URL` | URL (default `http://localhost:11434`) | Ollama endpoint |
 | `OPENAI_API_KEY` | key | Only if `AI_PROVIDER=openai` |
 | `OVERPASS_URL` | URL (optional override) | Overpass API endpoint |
+| `OVERPASS_USER_AGENT` | string | UA contact info per Overpass etiquette |
 
 ## 8. Known traps (learned the hard way, avoid anyway)
+
+- Overpass **rejects requests without a `User-Agent`** (HTTP 406) — the OSM provider always sends one; include real contact info via `OVERPASS_USER_AGENT` in production
 
 - Don't hardcode category names in the scoring/analyzer — pass them through config so new categories don't touch logic
 - Don't store raw HTML in the DB — store extracted analysis results

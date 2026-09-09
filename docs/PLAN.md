@@ -14,7 +14,7 @@
 |---|---|---|
 | 0 | Project setup | ✅ Done (2026-09-09) |
 | 1 | Data model & database | ✅ Done (2026-09-09) |
-| 2 | Business data provider (OSM) | ☐ Not started |
+| 2 | Business data provider (OSM) | ✅ Done (2026-09-09) |
 | 3 | Website detection & analyzer | ☐ Not started |
 | 4 | Opportunity scoring engine | ☐ Not started |
 | 5 | Scan pipeline & API | ☐ Not started |
@@ -57,17 +57,18 @@
 
 ---
 
-## Phase 2 — Business data provider (OSM)
+## Phase 2 — Business data provider (OSM) ✅
 
-- [ ] Define `BusinessProvider` interface: `search(params): Promise<Business[]>`, `getDetails(id): Promise<Business>` (spec §22)
-- [ ] Implement `OpenStreetMapProvider` using Overpass API:
-  - [ ] Query by lat/lng + radius + category (restaurant, clinic, salon, gym, etc.)
-  - [ ] Map OSM tags → normalized `Business` (name, address, phone, website, lat/lng)
-  - [ ] Handle timeout / rate limiting / empty results gracefully
-- [ ] Provider factory via env var `BUSINESS_PROVIDER=osm` (swap to `google` later without app changes)
-- [ ] Map the 10 V1 categories → OSM tag filters
+- [x] Define `BusinessProvider` interface: `search(params): Promise<Business[]>`, `getDetails(id): Promise<Business>` (spec §22) — `lib/business-providers/types.ts` + `ProviderError`
+- [x] Implement `OpenStreetMapProvider` using Overpass API (`lib/business-providers/osm.ts`):
+  - [x] Query by lat/lng + radius + category (nwr + around, per-tag union branches)
+  - [x] Map OSM tags → normalized `Business` (name/address/phone/website incl. `contact:*` variants, way/relation `center` coords)
+  - [x] Handle timeout / rate limiting / empty results gracefully — 30s timeout, one retry on 429/504, `[]` for empty, `ProviderError` otherwise; unnamed elements skipped; 20 fixtures-based tests
+- [x] Provider factory via env var `BUSINESS_PROVIDER=osm` (swap to `google` later without app changes) — `lib/business-providers/index.ts`
+- [x] Map the 10 V1 categories → OSM tag filters — `CATEGORY_OSM_TAGS` in `types/business.ts`
+- [x] Gotcha fixed: Overpass rejects requests without a `User-Agent` (HTTP 406) → UA now sent, `OVERPASS_USER_AGENT` env for contact info
 
-**Done when:** A manual test query for "Davao City · Restaurants · 10km" returns normalized businesses.
+**Done when:** A manual test query for "Davao City · Restaurants · 10km" returns normalized businesses. ✅ Verified live (`RUN_LIVE_TESTS=1`): **1,705 businesses** returned — 37 with website, 106 with phone.
 
 ---
 
