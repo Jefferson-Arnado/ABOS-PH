@@ -138,7 +138,7 @@ business_analysis                        leads
 ├─ https, mobile_friendly                ├─ status        (New|Contacted|Interested|
 ├─ booking_available, ordering_available │                 Proposal|Won|Lost)
 ├─ contact_form                          ├─ notes
-├─ opportunity_score                     ├─ created_at
+├─ opportunity_score, opportunity_tier   ├─ created_at
 ├─ analysis   (AI output)                └─ updated_at
 └─ created_at
 ```
