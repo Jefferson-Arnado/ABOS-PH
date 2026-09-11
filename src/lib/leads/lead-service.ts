@@ -125,6 +125,16 @@ export async function getLeadById(userId: string, leadId: string): Promise<Lead 
   return data ? rowToLead(data as LeadRowLike) : null;
 }
 
+/** Latest-analysis columns embedded through the businesses join. */
+interface AnalysisEmbed {
+  opportunity_score: number;
+  opportunity_tier: "high" | "medium" | "low";
+  issues: string[] | null;
+  unavailable: boolean | null;
+  https: boolean | null;
+  mobile_friendly: boolean | null;
+}
+
 /** A lead with its joined business + latest analysis (list/detail views). */
 export interface LeadWithBusiness {
   lead: Lead;
@@ -151,13 +161,19 @@ export interface LeadWithBusiness {
 /**
  * All leads for a user, newest first, with business + the latest analysis
  * score via the latest_business_analysis view.
+ *
+ * PostgREST embed note: the view has no FK from `leads`, so it must be
+ * embedded through `businesses` (leads.business_id → businesses.id ←
+ * latest_business_analysis.business_id). A top-level
+ * `latest_business_analysis(...)` on leads fails with "Could not find a
+ * relationship" (schema-cache error, verified live 2026-09-11).
  */
 export async function listLeadsWithBusiness(userId: string): Promise<LeadWithBusiness[]> {
   const db = getSupabaseAdmin();
   const { data, error } = await db
     .from("leads")
     .select(
-      "id, user_id, business_id, status, notes, created_at, updated_at, businesses(*), latest_business_analysis(opportunity_score, opportunity_tier, issues, unavailable, https, mobile_friendly)"
+      "id, user_id, business_id, status, notes, created_at, updated_at, businesses(*, latest_business_analysis(opportunity_score, opportunity_tier, issues, unavailable, https, mobile_friendly))"
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -165,39 +181,27 @@ export async function listLeadsWithBusiness(userId: string): Promise<LeadWithBus
 
   const rows = (data ?? []) as unknown as Array<
     LeadRowLike & {
-      businesses: {
-        id: string;
-        name: string;
-        category: string | null;
-        phone: string | null;
-        website: string | null;
-        source: string;
-        source_id: string;
-      } | null;
-      latest_business_analysis:
-        | {
-            opportunity_score: number;
-            opportunity_tier: "high" | "medium" | "low";
-            issues: string[] | null;
-            unavailable: boolean | null;
-            https: boolean | null;
-            mobile_friendly: boolean | null;
-          }
-        | Array<{
-            opportunity_score: number;
-            opportunity_tier: "high" | "medium" | "low";
-            issues: string[] | null;
-            unavailable: boolean | null;
-            https: boolean | null;
-            mobile_friendly: boolean | null;
-          }>
+      businesses:
+        | ({
+            id: string;
+            name: string;
+            category: string | null;
+            phone: string | null;
+            website: string | null;
+            source: string;
+            source_id: string;
+          } & {
+            latest_business_analysis: AnalysisEmbed | AnalysisEmbed[] | null;
+          })
         | null;
     }
   >;
 
   return rows.flatMap((row) => {
     if (!row.businesses) return []; // business row deleted → cascade removed the lead anyway
-    const raw = row.latest_business_analysis;
+    // PostgREST treats a view embed as 1:M (no unique constraint on the
+    // view's business_id), so the payload may be an object OR an array.
+    const raw = row.businesses.latest_business_analysis;
     const analysis = Array.isArray(raw) ? (raw[0] ?? null) : (raw ?? null);
     return [
       {
