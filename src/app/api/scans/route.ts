@@ -29,6 +29,17 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Auth first: never do any work (even validation) for anonymous callers.
+  // NOTE for curl testing: the Supabase session cookie is chunked
+  // (sb-*-auth-token.0/.1, ≤3180 bytes per chunk per the @supabase/ssr
+  // chunker). A raw access token stuffed into a single cookie is NOT a
+  // valid session — exercise the real flow through the login
+  // page/server action instead.
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -45,16 +56,6 @@ export async function POST(request: NextRequest) {
   }
 
   const params = parsed.data;
-
-  // Auth: 401 before doing any work. NOTE for curl testing: the Supabase
-  // session cookie is chunked (sb-*-auth-token.0/.1, ≤3180 bytes per chunk
-  // per the @supabase/ssr chunker). A raw access token stuffed into a
-  // single cookie is NOT a valid session — exercise the real flow through
-  // the login page/server action instead.
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
 
   // Fail fast (before the ~30s pipeline) when persistence isn't configured.
   try {

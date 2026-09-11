@@ -24,17 +24,3 @@ export function getSupabaseAdmin(): SupabaseClient {
   });
   return cached;
 }
-
-/**
- * The user that owns scans until Phase 6 auth lands (user decision
- * 2026-09-10). Seeded by scripts/seed-dev-user.mjs.
- */
-export function getDevUserId(): string {
-  const id = process.env.DEV_USER_ID;
-  if (!id) {
-    throw new Error(
-      "DEV_USER_ID missing — run scripts/seed-dev-user.mjs and add the id to .env.local"
-    );
-  }
-  return id;
-}

@@ -5,12 +5,13 @@
  * filters run in PostgREST so pagination + totals are exact.
  *
  * Note: `location` (name/address substring) still filters in-process
- * over the fetched page.
+ * over the fetched page. Auth: session required (401 without one).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { CATEGORIES } from "@/types/business";
+import { getSessionUser } from "@/lib/supabase/clients";
 import { queryBusinesses } from "@/lib/supabase/persist";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,11 @@ export async function GET(request: NextRequest) {
     );
   }
   const filters = parsed.data;
+
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
 
   try {
     const { total, businesses: page } = await queryBusinesses({
