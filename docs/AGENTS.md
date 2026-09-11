@@ -75,6 +75,7 @@ npx supabase db push # apply migrations (requires Supabase env)
 | `BUSINESS_PROVIDER` | `osm` (default) \| `google` | Business data source |
 | `AI_PROVIDER` | `ollama` (default) \| `openai` | AI analysis source |
 | `OLLAMA_BASE_URL` | URL (default `http://localhost:11434`) | Ollama endpoint |
+| `OLLAMA_MODEL` | model tag (default `llama3.2`) | Any pulled instruct model |
 | `OPENAI_API_KEY` | key | Only if `AI_PROVIDER=openai` |
 | `OVERPASS_URL` | URL (optional override) | Overpass API endpoint |
 | `OVERPASS_USER_AGENT` | string | UA contact info per Overpass etiquette |

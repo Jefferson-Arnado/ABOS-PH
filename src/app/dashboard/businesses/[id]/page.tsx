@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IssueList } from "@/components/business/issue-list";
 import { ReanalyzeButton } from "./reanalyze-button";
 import { SaveLeadButton } from "./save-lead-button";
+import { AiAnalysisButton } from "./ai-analysis-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Business analysis — Opportunity Scanner" };
@@ -61,7 +62,7 @@ export default async function BusinessDetailPage({
   const scored = await getBusinessWithLatestAnalysis(id);
   if (!scored) notFound();
 
-  const { business, analysis, opportunity } = scored;
+  const { business, analysis, opportunity, ai } = scored;
   const services = recommendServices(opportunity.issues, opportunity.tier);
   // Back to the originating scan results (cards pass ?from=<scanId>).
   const backHref = from ? `/dashboard/scans/${encodeURIComponent(from)}` : "/dashboard";
@@ -228,16 +229,66 @@ export default async function BusinessDetailPage({
         </Card>
       )}
 
-      {/* AI analysis (spec §12) — arrives in Phase 9, top prospects only */}
+      {/* AI analysis (spec §12) — top prospects only, cached in the DB */}
       <Card>
         <CardHeader>
           <CardTitle>AI analysis</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            AI-generated “why this business” analysis arrives in Phase 9 —
-            reserved for the top-scored prospects to keep costs at zero.
-          </p>
+          {ai ? (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Why this business
+                </p>
+                <p className="whitespace-pre-line text-sm">{ai.whyGoodProspect}</p>
+              </div>
+              {ai.recommendedServices.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Potential services
+                  </p>
+                  <ul className="space-y-1.5 text-sm">
+                    {ai.recommendedServices.map((service, i) => (
+                      <li
+                        key={`${service.name}-${i}`}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span>{service.name}</span>
+                        <Badge
+                          variant={
+                            service.priority === "high"
+                              ? "destructive"
+                              : service.priority === "medium"
+                                ? "outline"
+                                : "secondary"
+                          }
+                          className="capitalize"
+                        >
+                          {service.priority}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Sales angle
+                </p>
+                <p className="whitespace-pre-line text-sm">{ai.salesAngle}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                No AI analysis yet. Generation is reserved for the
+                top-scored prospects (spec §11 cost control) and runs on a
+                local model — results are cached here.
+              </p>
+              <AiAnalysisButton businessId={business.id} />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

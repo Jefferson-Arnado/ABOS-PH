@@ -6,8 +6,57 @@
  */
 
 import type { Business, BusinessSource } from "@/types/business";
-import type { OpportunityTier, WebsiteAnalysis } from "@/types/analysis";
+import type {
+  AiAnalysis,
+  OpportunityTier,
+  RecommendedService,
+  WebsiteAnalysis,
+} from "@/types/analysis";
 import type { BusinessRow } from "@/types/db";
+
+// ── AI analysis JSONB (spec §12) ──────────────────────────────────
+
+const SERVICE_PRIORITIES: RecommendedService["priority"][] = [
+  "high",
+  "medium",
+  "low",
+];
+
+/**
+ * Validate a `business_analysis.analysis` JSONB payload into an
+ * AiAnalysis. Returns null for null/anything malformed — the UI simply
+ * hides the AI section, and one bad row never breaks a page.
+ */
+export function aiAnalysisFromJson(raw: unknown): AiAnalysis | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const obj = raw as Record<string, unknown>;
+  if (
+    typeof obj.whyGoodProspect !== "string" ||
+    !obj.whyGoodProspect.trim() ||
+    typeof obj.salesAngle !== "string" ||
+    !obj.salesAngle.trim()
+  ) {
+    return null;
+  }
+  const services: RecommendedService[] = Array.isArray(obj.recommendedServices)
+    ? obj.recommendedServices.flatMap((s) => {
+        if (typeof s !== "object" || s === null) return [];
+        const rec = s as Record<string, unknown>;
+        if (typeof rec.name !== "string" || !rec.name.trim()) return [];
+        const priority = SERVICE_PRIORITIES.includes(
+          rec.priority as RecommendedService["priority"]
+        )
+          ? (rec.priority as RecommendedService["priority"])
+          : "medium";
+        return [{ name: rec.name.trim(), priority }];
+      })
+    : [];
+  return {
+    whyGoodProspect: obj.whyGoodProspect.trim(),
+    recommendedServices: services,
+    salesAngle: obj.salesAngle.trim(),
+  };
+}
 
 // ── Business ────────────────────────────────────────────────────────
 

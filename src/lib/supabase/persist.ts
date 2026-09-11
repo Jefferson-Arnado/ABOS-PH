@@ -7,12 +7,17 @@
  * (1:N history; latest wins via the latest_business_analysis view).
  */
 
-import type { Category } from "@/types/business";
-import type { OpportunityTier, ScoredBusiness } from "@/types/analysis";
+import type { Business, Category } from "@/types/business";
+import type {
+  AiAnalysis,
+  OpportunityTier,
+  ScoredBusiness,
+} from "@/types/analysis";
 import type { ScanRecord, ScanSummary } from "@/types/scan";
 import type { BusinessRow } from "@/types/db";
 import { getSupabaseAdmin } from "./server";
 import {
+  aiAnalysisFromJson,
   analysisRowToWebsiteAnalysis,
   analysisToInsert,
   businessToInsert,
@@ -420,6 +425,55 @@ export async function insertAnalysis(
   };
 }
 
+/**
+ * Resolve a business by DB UUID or provider id (e.g. "osm:node/1802759779").
+ * Shared by the analyze + ai-analysis routes (detail pages use UUIDs; the
+ * provider form exists for curl/debug).
+ */
+export async function resolveBusiness(
+  idOrProviderId: string
+): Promise<Business | null> {
+  const db = getSupabaseAdmin();
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  let row: BusinessRow | null = null;
+  if (UUID_RE.test(idOrProviderId)) {
+    const { data, error } = await db
+      .from("businesses")
+      .select("*")
+      .eq("id", idOrProviderId)
+      .maybeSingle();
+    if (error) throw new Error(`business lookup failed: ${error.message}`);
+    row = (data as BusinessRow | null) ?? null;
+  } else {
+    const separator = idOrProviderId.indexOf(":");
+    if (separator === -1) return null;
+    const sourceId = idOrProviderId.slice(separator + 1);
+    const { data, error } = await db
+      .from("businesses")
+      .select("*")
+      .eq("source_id", sourceId)
+      .maybeSingle();
+    if (error) throw new Error(`business lookup failed: ${error.message}`);
+    row = (data as BusinessRow | null) ?? null;
+  }
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category ?? undefined,
+    address: row.address ?? undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
+    phone: row.phone ?? undefined,
+    website: row.website ?? undefined,
+    source: row.source,
+    sourceId: row.sourceId,
+  };
+}
+
 /** Look up a business's DB id by provider id (e.g. "node/123"). */
 export async function getBusinessIdBySourceId(
   sourceId: string
@@ -436,11 +490,12 @@ export async function getBusinessIdBySourceId(
 
 /**
  * One business + its latest analysis (latest row wins, ARCHITECTURE §5)
- * for the detail page (spec §14). Returns null when the id is unknown.
+ * for the detail page (spec §14), plus any cached AI analysis (spec §12,
+ * stored in business_analysis.analysis). Returns null when unknown.
  */
 export async function getBusinessWithLatestAnalysis(
   businessId: string
-): Promise<ScoredBusiness | null> {
+): Promise<(ScoredBusiness & { ai: AiAnalysis | null }) | null> {
   const db = getSupabaseAdmin();
 
   const { data, error } = await db
@@ -468,10 +523,12 @@ export async function getBusinessWithLatestAnalysis(
           | (AnalysisRowSnake & {
               opportunity_score: number;
               opportunity_tier: OpportunityTier;
+              analysis?: unknown;
             })
           | (AnalysisRowSnake & {
               opportunity_score: number;
               opportunity_tier: OpportunityTier;
+              analysis?: unknown;
             })[]
           | null;
       }
@@ -490,7 +547,13 @@ export async function getBusinessWithLatestAnalysis(
   // view's business_id), so the payload may be an object OR an array.
   const raw = row.latest_business_analysis;
   const a = Array.isArray(raw) ? (raw[0] ?? null) : raw;
-  if (!a) return { business, analysis: null, opportunity: { score: 0, tier: "low", issues: [] } };
+  if (!a)
+    return {
+      business,
+      analysis: null,
+      opportunity: { score: 0, tier: "low", issues: [] },
+      ai: null,
+    };
 
   return {
     business,
@@ -500,5 +563,112 @@ export async function getBusinessWithLatestAnalysis(
       tier: a.opportunity_tier,
       issues: a.issues ?? [],
     },
+    ai: aiAnalysisFromJson(a.analysis),
   };
+}
+
+// ── AI analysis (spec §11–§12, PLAN.md Phase 9) ─────────────────────
+
+/** Latest-analysis row metadata + cached AI output for one business. */
+export interface LatestAnalysisMeta {
+  analysisRowId: string;
+  score: number;
+  tier: OpportunityTier;
+  issues: string[];
+  ai: AiAnalysis | null;
+}
+
+/**
+ * The latest business_analysis row for a business (score inputs the AI
+ * prompt needs, plus whether an AI analysis is already cached).
+ */
+export async function getLatestAnalysisMeta(
+  businessId: string
+): Promise<LatestAnalysisMeta | null> {
+  const db = getSupabaseAdmin();
+  const { data, error } = await db
+    .from("latest_business_analysis")
+    .select("id, business_id, opportunity_score, opportunity_tier, issues, analysis")
+    .eq("business_id", businessId)
+    .maybeSingle();
+  if (error) throw new Error(`latest analysis query failed: ${error.message}`);
+  if (!data) return null;
+
+  const row = data as {
+    id: string;
+    business_id: string;
+    opportunity_score: number;
+    opportunity_tier: OpportunityTier;
+    issues: string[] | null;
+    analysis: unknown;
+  };
+  return {
+    analysisRowId: row.id,
+    score: row.opportunity_score,
+    tier: row.opportunity_tier,
+    issues: row.issues ?? [],
+    ai: aiAnalysisFromJson(row.analysis),
+  };
+}
+
+/**
+ * Top-scored prospect business ids (spec §11 cost control): the AI
+ * analysis is reserved for the highest-scoring businesses. Ranks by the
+ * latest analysis score across all businesses (global top-N; ties at 80
+ * are common with no-website businesses, so eligibility is generous —
+ * recorded in PLAN.md Phase 9 notes).
+ */
+export async function getTopProspectBusinessIds(limit = 20): Promise<string[]> {
+  const db = getSupabaseAdmin();
+  const { data, error } = await db
+    .from("latest_business_analysis")
+    .select("business_id")
+    .order("opportunity_score", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`top prospects query failed: ${error.message}`);
+  return ((data ?? []) as Array<{ business_id: string }>).map((r) => r.business_id);
+}
+
+/**
+ * Most recent scan's location label containing this business (gives the
+ * AI prompt a "Davao City"-style location; businesses don't store one).
+ */
+export async function getLatestScanLocationForBusiness(
+  businessId: string
+): Promise<string | null> {
+  const db = getSupabaseAdmin();
+  const { data: links, error: linkErr } = await db
+    .from("scan_businesses")
+    .select("scan_id")
+    .eq("business_id", businessId);
+  if (linkErr) throw new Error(`scan_businesses query failed: ${linkErr.message}`);
+  const scanIds = (links ?? []).map((l) => l.scan_id);
+  if (scanIds.length === 0) return null;
+
+  const { data: scan, error } = await db
+    .from("scans")
+    .select("location")
+    .in("id", scanIds)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`scans query failed: ${error.message}`);
+  return (scan as { location: string } | null)?.location ?? null;
+}
+
+/**
+ * Persist the AI output (spec §12) on the LATEST analysis row — the AI
+ * text belongs to those website facts; a later re-analysis appends a new
+ * row and the AI text is naturally invalidated with the old one.
+ */
+export async function saveAiAnalysis(
+  analysisRowId: string,
+  ai: AiAnalysis
+): Promise<void> {
+  const db = getSupabaseAdmin();
+  const { error } = await db
+    .from("business_analysis")
+    .update({ analysis: ai })
+    .eq("id", analysisRowId);
+  if (error) throw new Error(`ai analysis save failed: ${error.message}`);
 }

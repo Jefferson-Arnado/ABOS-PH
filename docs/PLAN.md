@@ -21,8 +21,8 @@
 | 6 | UI — Search screen | ✅ Done (2026-09-10) — incl. auth, pulled forward |
 | 7 | UI — Results dashboard & detail page | ✅ Done (2026-09-10) — verified live; tracker caught up 2026-09-11 |
 | 8 | Leads & CSV export | ✅ Done (2026-09-11) |
-| 9 | AI opportunity analysis (top prospects) | ☐ Not started |
-| 10 | Testing & acceptance | ☐ Not started |
+| 9 | AI opportunity analysis (top prospects) | ✅ Done (2026-09-11) — Ollama dev provider |
+| 10 | Testing & acceptance | 🔶 In progress — unit suites done, live acceptance pending |
 
 ---
 
@@ -187,16 +187,18 @@
 
 ---
 
-## Phase 9 — AI opportunity analysis (top prospects only)
+## Phase 9 — AI opportunity analysis (top prospects only) ✅
 
-- [ ] Define `AIProvider` interface (`analyzeBusiness(data): Promise<Analysis>`) — spec §23
-- [ ] Implement `OllamaProvider` (local, dev) + stub `OpenAIProvider` for later; selected via env var
-- [ ] **Cost control:** AI runs only for the **top 20** scored prospects — never per-business during scan (spec §11)
-- [ ] `POST /api/businesses/:id/ai-analysis` — generate "Why this is a good prospect", potential services, sales angle (spec §12)
-- [ ] Store generated analysis in `business_analysis.analysis`
-- [ ] Optional V1.5: "Generate Outreach" email draft with `[Copy Message]` (no auto-sending)
+- [x] Define `AIProvider` interface (`analyzeBusiness(data): Promise<Analysis>`) — spec §23 — `lib/ai/types.ts` (`BusinessAnalysisInput` carries only pipeline-derived facts + optional lead notes; `AIProviderError` maps to 502)
+- [x] Implement `OllamaProvider` (local, dev) + stub `OpenAIProvider` for later; selected via env var — `lib/ai/ollama.ts` (`/api/chat`, `format: "json"`, temperature 0.4, 120s timeout, injectable fetch/model/endpoint) · `lib/ai/openai.ts` (intentional stub, throws `AIProviderError`) · `lib/ai/index.ts` factory (`AI_PROVIDER=ollama` default; `OLLAMA_MODEL` env, default `llama3.2`)
+- [x] **Cost control:** AI runs only for the **top 20** scored prospects — never per-business during scan (spec §11) — enforced in the route via `getTopProspectBusinessIds(20)` (global ranking by latest-analysis score; ties at the cutoff are common since no-website businesses cluster at 80, so eligibility is a generous cap, not a strict leaderboard)
+- [x] `POST /api/businesses/:id/ai-analysis` — generate "Why this is a good prospect", potential services, sales angle (spec §12) — 401/404/409 (no analysis yet)/403 (not top-20)/502 (provider) paths; accepts UUID or provider id via shared `resolveBusiness`
+- [x] Store generated analysis in `business_analysis.analysis` — cached on the **latest analysis row** (AI text belongs to those website facts; a later re-analysis appends a new row and invalidates the old AI text naturally); second call is a cache hit (`cached: true`), never a second model run
+- [x] Detail page renders the cached AI analysis (why/services/sales angle) with a Generate button when absent; payload re-validated through `aiAnalysisFromJson` (malformed JSONB → section hidden, page never breaks)
 
-**Done when:** Acceptance Test #9 passes (top leads get AI-generated explanation).
+  Implementation notes: prompt builder + response parser are pure and unit-tested (fences/prose tolerated, invalid service entries dropped, missing required fields → `AIProviderError`) — 16 tests in `tests/ai-provider.test.ts`, 3 in `tests/ai-mappers.test.ts`. The AI prompt references the issue list from the deterministic engine (spec §12) and the latest scan's location label.
+
+**Done when:** Acceptance Test #9 passes (top leads get AI-generated explanation). ✅ Code complete + unit tests; live verification pending (requires Ollama running: `ollama pull llama3.2 && ollama serve`, then Generate on a top prospect's detail page).
 
 ---
 
