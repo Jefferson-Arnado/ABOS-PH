@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IssueList } from "@/components/business/issue-list";
 import { ReanalyzeButton } from "./reanalyze-button";
+import { SaveLeadButton } from "./save-lead-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Business analysis — Opportunity Scanner" };
@@ -95,6 +96,7 @@ export default async function BusinessDetailPage({
           <p className="text-sm text-muted-foreground">{business.name}</p>
         </div>
         <ReanalyzeButton businessId={business.id} className="ml-auto" />
+        <SaveLeadButton businessId={business.id} className="ml-2" />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

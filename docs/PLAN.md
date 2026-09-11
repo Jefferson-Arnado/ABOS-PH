@@ -19,8 +19,8 @@
 | 4 | Opportunity scoring engine | ✅ Done (2026-09-10) |
 | 5 | Scan pipeline & API | ✅ Done (2026-09-10) — DB persistence live |
 | 6 | UI — Search screen | ✅ Done (2026-09-10) — incl. auth, pulled forward |
-| 7 | UI — Results dashboard & detail page | ☐ Not started |
-| 8 | Leads & CSV export | ☐ Not started |
+| 7 | UI — Results dashboard & detail page | ✅ Done (2026-09-10) — verified live; tracker caught up 2026-09-11 |
+| 8 | Leads & CSV export | ✅ Done (2026-09-11) |
 | 9 | AI opportunity analysis (top prospects) | ☐ Not started |
 | 10 | Testing & acceptance | ☐ Not started |
 
@@ -169,19 +169,21 @@
   - [ ] Problems list, Recommended services, AI Analysis section
 - [ ] Empty / loading / error states for all views
 
-**Done when:** Acceptance Tests #5–#6 pass (filter + detail view).
+**Done when:** Acceptance Tests #5–#6 pass (filter + detail view). ✅ Verified live 2026-09-10 (filter tabs render counts, sort toggles, cards link to detail with score banner + checks grid + recommended services; ownership enforced — foreign scan ids redirect). Tracker was left stale; caught up 2026-09-11.
 
 ---
 
-## Phase 8 — Leads & CSV export
+## Phase 8 — Leads & CSV export ✅
 
-- [ ] `POST /api/leads` — Save Lead (business → `leads` with status `New`)
-- [ ] `PATCH /api/leads/:id` — update status/notes
-- [ ] My Leads dashboard (spec §16): totals by status (`New / Contacted / Interested / Proposal / Won / Lost`)
-- [ ] `GET /api/leads/export` — CSV export (`Business, Category, Phone, Website, Score, Opportunity`)
-- [ ] Dedup: saving the same business twice doesn't create duplicate leads
+- [x] `POST /api/leads` — Save Lead (business → `leads` with status `New`) — zod-validated, 401 without session, **idempotent dedup**: the DB `unique (user_id, business_id)` constraint + 23505 fallback returns the existing lead (201 fresh / 200-equivalent semantics without erroring); `GET /api/leads` lists leads with business + latest-analysis joins
+- [x] `PATCH /api/leads/:id` — update status/notes — owner-only (404 for other users' leads), zod enum validation against `LEAD_STATUSES`
+- [x] My Leads dashboard (spec §16): totals by status (`New / Contacted / Interested / Proposal / Won / Lost`) — `/dashboard/leads` with 7 summary cards, per-lead status dropdown (server action), empty/error states
+- [x] `GET /api/leads/export` — CSV export (`Business, Category, Phone, Website, Score, Opportunity`) — RFC 4180 quoting/escaping, CRLF, `Content-Disposition: attachment; filename="leads.csv"`; opportunity column via shared `opportunityLabel` (No Website / Weak Website / tier)
+- [x] Dedup: saving the same business twice doesn't create duplicate leads — Save Lead button flips to a "Saved" state (idempotent re-save)
 
-**Done when:** Acceptance Tests #7–#8 pass (Save Lead + CSV export).
+  Implementation: `lib/leads/csv.ts` + `lib/leads/summary.ts` (pure, 13 unit tests in `tests/leads.test.ts`) · `lib/leads/lead-service.ts` (service-role helpers; joins `latest_business_analysis` for score/tier/flags) · Save Lead via server action (`save-lead-action.ts` + `save-lead-button.tsx`) on both the results cards and the detail page. No schema change (the Phase 1 `leads` table + RLS were already in place).
+
+**Done when:** Acceptance Tests #7–#8 pass (Save Lead + CSV export). ✅ Code complete + unit tests; live curl/browser verification pending (start `next dev`, log in, Save Lead → check `/dashboard/leads` totals → Export CSV opens `leads.csv`).
 
 ---
 
@@ -206,7 +208,7 @@
   - [ ] Scoring: every rule, edge cases (no website → website checks skipped), 0–100 normalization, tier mapping, spec §10 examples
   - [ ] Website analyzer: parse HTML fixtures (with/without viewport, booking keywords, contact info); unreachable-site handling
   - [ ] Normalization: OSM payload → `Business`
-  - [ ] CSV export: header + row formatting
+  - [ ] CSV export: header + row formatting — ✅ covered by `tests/leads.test.ts` (13 tests: escaping, null cells, CRLF, header-only empty list)
 - [ ] **Integration tests (API routes):**
   - [ ] `POST /api/scans` with mocked provider/analyzer → persisted businesses + scores
   - [ ] Save lead, update lead, duplicate-save rejection

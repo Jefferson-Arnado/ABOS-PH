@@ -3,12 +3,12 @@ import { MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreBadge } from "@/components/business/score-badge";
 import { IssueList } from "@/components/business/issue-list";
+import { SaveLeadButton } from "@/app/dashboard/businesses/[id]/save-lead-button";
 import type { ScoredBusiness } from "@/types/analysis";
 
 /**
  * Business card for the results dashboard (spec §13): score badge, tier
- * icon, location, top issues, and the View Analysis action. Save Lead
- * arrives with the leads work (Phase 8).
+ * icon, location, top issues, and the View Analysis + Save Lead actions.
  */
 export function BusinessCard({
   scored,
@@ -38,9 +38,12 @@ export function BusinessCard({
           <IssueList issues={opportunity.issues} max={3} />
         </div>
       </div>
-      <Button asChild variant="outline" size="sm" className="shrink-0">
-        <Link href={detailHref}>View Analysis</Link>
-      </Button>
+      <div className="flex shrink-0 items-center gap-2">
+        <SaveLeadButton businessId={business.id} />
+        <Button asChild variant="outline" size="sm">
+          <Link href={detailHref}>View Analysis</Link>
+        </Button>
+      </div>
     </div>
   );
 }
