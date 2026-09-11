@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSessionUser } from "@/lib/supabase/clients";
 import { signout } from "@/app/login/actions";
@@ -25,6 +26,13 @@ export default async function DashboardLayout({
             Opportunity Scanner
           </Link>
           <div className="flex items-center gap-3 text-sm">
+            <Link
+              href="/dashboard/leads"
+              className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <NotebookPen className="size-4" aria-hidden />
+              My Leads
+            </Link>
             <span className="text-muted-foreground">{user.email}</span>
             <form action={signout}>
               <Button type="submit" variant="ghost" size="sm">
